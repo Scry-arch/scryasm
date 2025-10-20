@@ -1,0 +1,19 @@
+[package]
+name = "scryasm"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+scry_asm = { git = "https://github.com/scry-arch/scry_asm.git" }
+clap = { version = "4.5.49", features = ["derive"] }
+
+[dev-dependencies]
+scry_isa = { git = "https://github.com/scry-arch/scry_isa.git", features = ["quickcheck_arbitrary"] }
+assert_cmd = "2.0.4"
+predicates = "3.1.3"
+quickcheck = "1"
+quickcheck_macros = "1.1"
+
+[features]
+default = []
+fail-on-warnings = [] # Forces compilation to fail if any warnings are given. Used in CI.
