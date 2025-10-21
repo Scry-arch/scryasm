@@ -1,19 +1,21 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
+use itertools::Itertools;
 use scry_asm::Assemble;
+use scry_isa::{Instruction, Parser as ScryParser};
 use std::{
 	io,
-	io::{Write, stdout},
+	io::{Read, Write, stdout},
 };
 
 #[derive(clap::ValueEnum, Clone, Eq, PartialEq)]
-enum OutputFormat
+enum Format
 {
-	/// Each output byte is printed as a two-digit hexadecimal
+	/// Each byte is printed as a two-digit hexadecimal
 	TextHex,
 
-	/// Output directly
+	/// Raw bytes
 	Raw,
 }
 
@@ -21,34 +23,65 @@ enum OutputFormat
 #[derive(Parser)]
 struct Cli
 {
-	/// Disassemble machine code to textual assembly
-	#[clap(short, long)]
-	disassemble: bool,
+	#[command(subcommand)]
+	command: Command,
+}
 
-	#[clap(long)]
-	#[arg(value_enum, default_value_t = OutputFormat::TextHex)]
-	out_format: OutputFormat,
+#[derive(Subcommand)]
+enum Command
+{
+	/// (Default) Assemble textual assembly to machine code
+	Assemble
+	{
+		#[clap(long)]
+		#[arg(value_enum, default_value_t = Format::TextHex)]
+		out_format: Format,
+	},
+
+	/// Disassemble machine code to textual assembly
+	Disassemble
+	{
+		#[clap(long)]
+		#[arg(value_enum, default_value_t = Format::Raw)]
+		in_format: Format,
+	},
 }
 
 fn main() -> io::Result<()>
 {
 	let args = Cli::parse();
 
-	let mut stdin_buf = String::new();
-	io::stdin().read_line(&mut stdin_buf)?;
+	let mut stdin_buf = Vec::new();
+	io::stdin().read_to_end(&mut stdin_buf)?;
 
-	// File is in textual assembly, assemble it
-	let assembled = scry_asm::Raw::assemble(std::iter::once(stdin_buf.as_str())).unwrap();
-
-	if args.out_format == OutputFormat::TextHex
+	if let Command::Assemble { out_format } = args.command
 	{
-		let mut iter = assembled.iter();
-		print!("{:02x}", iter.next().unwrap());
-		iter.for_each(|b| print!(" {:02x}", b));
+		let text_asm = String::from_utf8(stdin_buf).unwrap();
+		let assembled = scry_asm::Raw::assemble(std::iter::once(text_asm.as_str())).unwrap();
+
+		if out_format == Format::TextHex
+		{
+			let mut iter = assembled.iter();
+			print!("{:02x}", iter.next().unwrap());
+			iter.for_each(|b| print!(" {:02x}", b));
+		}
+		else
+		{
+			stdout().write(assembled.as_slice()).unwrap();
+		};
 	}
 	else
 	{
-		stdout().write(assembled.as_slice()).unwrap();
-	};
+		// Input is encoded machine code, decode it
+		for (b1, b2) in stdin_buf.iter().tuples()
+		{
+			let encoded_instr = u16::from_le_bytes([*b1, *b2]);
+			let mut text_instr = String::new();
+
+			Instruction::print(&Instruction::decode(encoded_instr), &mut text_instr).unwrap();
+			print!("{} ", text_instr);
+		}
+	}
+
 	Ok(())
 }

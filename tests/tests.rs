@@ -64,7 +64,7 @@ fn text_instruction_to_text_hex(
 	let asm_buf = to_text_assembly(&instructions);
 
 	// Assemble
-	let assert = invoke_assemble(asm_buf, &[]);
+	let assert = invoke_assemble(asm_buf, &["assemble"]);
 
 	// Test
 	assert
@@ -91,12 +91,37 @@ fn text_instruction_to_raw(
 	let asm_buf = to_text_assembly(&instructions);
 
 	// Assemble
-	let assert = invoke_assemble(asm_buf, &["--out-format=raw"]);
+	let assert = invoke_assemble(asm_buf, &["assemble", "--out-format=raw"]);
 
 	// Test
 	assert
 		.try_code(predicate::eq(0))?
 		.try_stdout(predicate::eq(encoded))?
+		.try_stderr(predicates::str::is_empty())
+		.map(|_| ())
+}
+
+/// Tests can get instructions in raw bytes and output textual assembly
+#[quickcheck]
+fn raw_instruction_to_text(
+	first: Instruction,
+	mut instructions: Vec<Instruction>,
+) -> Result<(), AssertError>
+{
+	// Ensure there is at least 1 instruction
+	instructions.push(first);
+
+	let encoded = to_encoded(&instructions);
+
+	let asm_buf = to_text_assembly(&instructions);
+
+	// Assemble
+	let assert = invoke_assemble(encoded, &["disassemble"]);
+
+	// Test
+	assert
+		.try_code(predicate::eq(0))?
+		.try_stdout(predicate::eq(asm_buf))?
 		.try_stderr(predicates::str::is_empty())
 		.map(|_| ())
 }
